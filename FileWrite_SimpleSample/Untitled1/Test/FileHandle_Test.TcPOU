@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FileHandle_Test" Id="{00a7a99f-6a36-478c-a940-0b908077d8b5}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FileHandle_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+	{attribute 'old_input_assignments' := ''}
+	fbFilehandle: FB_FileHandle('C:\logtest', 'test.txt');
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fileopen();
+filewriteHelloWorld();
+fileclose();]]></ST>
+    </Implementation>
+    <Method Name="fileclose" Id="{3e3858ab-5d28-45f8-ad9a-2114898637b6}">
+      <Declaration><![CDATA[METHOD fileclose
+VAR_INST
+	Timer : TON := (PT := T#10S);
+	Actual : BOOL;
+	step : INT;
+	ExpectedValue : BOOL := TRUE;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED('fileclose') THEN
+	Timer(IN:=TRUE);
+	fbFilehandle.M_FileClose();
+	
+	Actual := fbFilehandle.isFileClosed;
+	
+	IF Timer.Q OR Actual = ExpectedValue THEN
+		AssertEquals(Expected := ExpectedValue, Actual := Actual, Message:= 'File is not closed');
+		TEST_FINISHED();
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="fileopen" Id="{37471cd9-3a5b-4573-9bc7-db0fb10e73ae}">
+      <Declaration><![CDATA[METHOD fileopen
+VAR_INST
+	Timer : TON := (PT := T#10S);
+	ExpectedValue : BOOL := TRUE;
+	Actual : BOOL;
+
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED('fileopen') THEN
+	Timer(IN:=TRUE);
+	fbFilehandle.M_FileOpen();
+	Actual := fbFilehandle.isFileOpened;
+	
+	IF Timer.Q OR fbFilehandle.isFileOpened THEN
+		AssertEquals(Expected := ExpectedValue, Actual := Actual, Message:= 'File is not opened');
+		TEST_FINISHED();
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="filewriteHelloWorld" Id="{e9f7c78b-f68d-44db-ae98-bd4de2da2e5d}">
+      <Declaration><![CDATA[METHOD filewriteHelloWorld
+VAR_INST
+	Timer : TON := (PT := T#10S);
+	ExpectedValue : STRING := '';
+	Actual : STRING;
+	step : INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED('filewriteHelloWorld') THEN
+	Timer(IN:=TRUE);
+	CASE step OF
+		0:
+			fbFilehandle.P_SomethingToWrite := 'Hello world';
+			step := 10;
+		10:
+			fbFilehandle.M_FileWrite();		
+	END_CASE
+	
+	Actual := fbFilehandle.P_SomethingToWrite;
+	
+	IF Timer.Q OR Actual ='' THEN
+		AssertEquals(Expected := ExpectedValue, Actual := Actual, Message:= 'File is not written');
+		TEST_FINISHED();
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

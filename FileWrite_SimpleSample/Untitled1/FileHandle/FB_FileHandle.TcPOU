@@ -1,0 +1,236 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_FileHandle" Id="{6e354855-d896-4c11-9eb6-3c21cbff619a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_FileHandle
+VAR
+	_sNetID: T_AmsNetId;
+	_ErrorMessage: STRING;
+	_bError: BOOL;
+	_bFileOpened: BOOL;
+	_bFileClosed: BOOL;
+	_sWrite: STRING;
+	_bDirectoryCreated: BOOL;
+	sFileName: STRING;
+	sDirectory: STRING;
+	hFile: UINT;
+	fbCreateDirectory: FB_CreateDir;
+	fbFileOpen: FB_FileOpen;
+	fbFileWrite: FB_FileWrite;
+	fbFileClose: FB_FileClose;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{9b9fadf7-825a-48d7-b801-6328987d722b}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	/// if TRUE, the retain variables are initialized (warm start / cold start)
+	bInitRetains: BOOL;
+	/// if TRUE, the instance afterwards gets moved into the copy code (online change)
+	bInCopyCode: BOOL;
+	Directory: STRING;
+	FileName: STRING;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetPath(Directory, FileName);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="isErrorOccured" Id="{cdcc4e3e-e26b-49ea-b6f9-b8d42764b31c}">
+      <Declaration><![CDATA[PROPERTY isErrorOccured : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{bc410799-e964-4627-8878-7cde17a17db4}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isErrorOccured := This^._bError;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isFileClosed" Id="{bce0b5a9-9157-4340-b16b-e365091fabf4}">
+      <Declaration><![CDATA[PROPERTY isFileClosed : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{fedacfe5-9b34-445b-b0de-d4f2661137b7}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isFileClosed := This^._bFileClosed;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isFileOpened" Id="{56fe483f-c565-4b1b-84e9-a4835f9a4735}">
+      <Declaration><![CDATA[PROPERTY isFileOpened : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{c2f8d079-8224-4ee9-ac2d-d5d39ffad1e4}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isFileOpened := This^._bFileOpened;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_FileClose" Id="{5d157b2a-2771-4a2c-bc30-1c8d0c9b1edc}">
+      <Declaration><![CDATA[METHOD M_FileClose
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbFileClose(
+	sNetId:= _sNetId, 
+	hFile:= hFile, 
+	bExecute:= TRUE, 
+	tTimeout:= , 
+	bBusy=> , 
+	bError=> , 
+	nErrId=> );
+	
+IF fbFileClose.bError THEN
+	_ErrorMessage := CONCAT('FileOpen Failed ErrID = ', UDINT_TO_STRING(fbFileClose.nErrId));
+	_bError := TRUE;
+	fbFileClose(bExecute := FALSE);
+	Return;
+END_IF
+
+IF fbFileClose.bBusy THEN
+	RETURN;
+ELSE
+	_bFileClosed := TRUE;
+	_bFileOpened := FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_FileOpen" Id="{74f81313-f49f-471d-b6bc-904b3e857261}">
+      <Declaration><![CDATA[METHOD M_FileOpen
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT _bDirectoryCreated THEN
+	fbCreateDirectory(sPathName := THIS^.sDirectory ,bExecute := TRUE);
+	
+	IF fbCreateDirectory.bBusy THEN
+		_bDirectoryCreated := FALSE;
+		RETURN;	
+	ELSE 
+		fbCreateDirectory(bExecute := FALSE);
+		_bDirectoryCreated := TRUE;
+	END_IF
+ELSE
+	fbFileOpen(
+		sNetId:= , 
+		sPathName:= P_FilePath, 
+		nMode:= FOPEN_MODEAPPEND OR FOPEN_MODETEXT , 
+		ePath:=PATH_GENERIC, 
+		bExecute:= TRUE, 
+		tTimeout:= , 
+		bBusy=> , 
+		bError=> , 
+		nErrId=> , 
+		hFile=> hFile);
+	
+	IF fbFileOpen.bError THEN
+		_ErrorMessage := CONCAT('FileOpen Failed ErrID = ', UDINT_TO_STRING(fbFileOpen.nErrId));
+		RETURN;
+	END_IF
+		
+	IF fbFileOpen.bBusy THEN
+		RETURN;
+	ELSE
+		fbFileOpen(bExecute := FALSE);
+		_bFileOpened := TRUE;
+		_bFileClosed := FALSE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_FileWrite" Id="{35b963a3-f675-4192-9c21-765ba48c8f7a}">
+      <Declaration><![CDATA[METHOD M_FileWrite
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _sWrite <> '' THEN
+	fbFileWrite(
+		sNetId:= _sNetID, 
+		hFile:= hFile, 
+		pWriteBuff:= ADR(_sWrite) , 
+		cbWriteLen:= INT_TO_UDINT(LEN(_sWrite)), 
+		bExecute:= TRUE, 
+		tTimeout:= , 
+		bBusy=> , 
+		bError=> , 
+		nErrId=> , 
+		cbWrite=> );
+		
+	IF fbFileWrite.bError THEN
+		_ErrorMessage := CONCAT('FileWrite Failed ErrID = ', UDINT_TO_STRING(fbFileWrite.nErrId));
+		Return;
+	END_IF
+	
+	IF fbFileWrite.bBusy THEN
+		RETURN;
+	ELSE
+		fbFileWrite(bExecute := FALSE);
+		_sWrite := '';  //Reset sWrite after file write
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetPath" Id="{6170592f-9344-4294-bdef-e818e6334847}">
+      <Declaration><![CDATA[METHOD PRIVATE M_SetPath
+VAR_INPUT
+	sDirectory: STRING;
+	sFileName: STRING;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.sDirectory := sDirectory;
+THIS^.sFileName := sFileName;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_ErrorMessage" Id="{2d708a9a-fe87-433f-a267-8a592eeb1175}">
+      <Declaration><![CDATA[PROPERTY P_ErrorMessage : T_Maxstring
+]]></Declaration>
+      <Get Name="Get" Id="{cb38d3e2-c7c8-4bdd-a40d-e9735a400745}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_ErrorMessage := _ErrorMessage;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_FilePath" Id="{cb7e9d2b-4c47-4dcb-8623-7a8e8d4a92fe}">
+      <Declaration><![CDATA[PROPERTY P_FilePath : STRING
+]]></Declaration>
+      <Get Name="Get" Id="{d86e9153-5077-43bc-8ac1-9185743e5b31}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_FilePath := CONCAT(This^.sDirectory, CONCAT('/', This^.sFileName));]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_sNetID" Id="{20b7f168-63ae-4c81-8c01-791f2a11491b}">
+      <Declaration><![CDATA[PROPERTY P_sNetID : T_AmsNetID
+]]></Declaration>
+      <Get Name="Get" Id="{f900ce5e-d8c7-49f0-a8c4-08c647404a7b}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_sNetID := This^._sNetID;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{4b90a82e-ec70-4c3f-be59-8271d2b76c0b}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ This^._sNetID :=P_sNetID;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_SomethingToWrite" Id="{ff3f8e55-63cc-4185-b7a2-2bd159723e90}">
+      <Declaration><![CDATA[PROPERTY P_SomethingToWrite : T_Maxstring
+]]></Declaration>
+      <Get Name="Get" Id="{3f8eb8ae-b2b1-4edf-ae60-7b51551fa729}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_SomethingToWrite:= This^._sWrite ;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{819b5759-4e6c-4555-99b5-a880ab01217b}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[This^._sWrite := P_SomethingToWrite;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+  </POU>
+</TcPlcObject>
